@@ -1,12 +1,14 @@
 import { App, Duration, Stack, StackProps } from 'aws-cdk-lib';
-import { LambdaIntegration, MethodLoggingLevel, RestApi } from 'aws-cdk-lib/aws-apigateway';
+import { AuthorizationType, IdentitySource, LambdaIntegration, MethodLoggingLevel, RequestAuthorizer, RestApi } from 'aws-cdk-lib/aws-apigateway';
 import { CfnPermission, Runtime } from 'aws-cdk-lib/aws-lambda';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import { Construct } from 'constructs';
 
 export class MyStack extends Stack {
-  private restApi: RestApi;
-  private hellowFunction: NodejsFunction;
+  public restApi: RestApi;
+  public hellowFunction: NodejsFunction;
+  public authorizerFunction: NodejsFunction;
+  public authorizer: RequestAuthorizer;
 
   constructor(scope: Construct, id: string, props: StackProps = {}) {
     super(scope, id, props);
@@ -20,8 +22,22 @@ export class MyStack extends Stack {
       },
     });
 
+    this.authorizerFunction = new NodejsFunction(this, `${id}-lambda-authorizer`, {
+      functionName: `${id}-lambda-authorizer`,
+      entry: 'src/app/authorizer/handler.ts',
+      handler: 'handler',
+      runtime: Runtime.NODEJS_14_X,
+      memorySize: 512,
+      timeout: Duration.seconds(10),
+    });
+
+    this.authorizer = new RequestAuthorizer(this, `${id}-authorizer`, {
+      handler: this.authorizerFunction,
+      identitySources: [IdentitySource.queryString('token')],
+    });
+
     this.hellowFunction = new NodejsFunction(this, `${id}-lambda-hellow`, {
-      functionName: 'lambda-hellow',
+      functionName: `${id}-lambda-hellow`,
       entry: 'src/app/hellow/handler.ts',
       handler: 'handler',
       runtime: Runtime.NODEJS_14_X,
@@ -31,7 +47,10 @@ export class MyStack extends Stack {
 
     this.restApi.root
       .addResource('hellow')
-      .addMethod('GET', new LambdaIntegration(this.hellowFunction, {}));
+      .addMethod('GET', new LambdaIntegration(this.hellowFunction, {}), {
+        authorizationType: AuthorizationType.CUSTOM,
+        authorizer: this.authorizer,
+      });
 
     this.restApi.node.addDependency(
       new CfnPermission(this, `${id}-invoke-permission-hellow`, {
