@@ -1,11 +1,46 @@
-import { App, Stack, StackProps } from 'aws-cdk-lib';
+import { App, Duration, Stack, StackProps } from 'aws-cdk-lib';
+import { LambdaIntegration, MethodLoggingLevel, RestApi } from 'aws-cdk-lib/aws-apigateway';
+import { CfnPermission, Runtime } from 'aws-cdk-lib/aws-lambda';
+import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import { Construct } from 'constructs';
 
 export class MyStack extends Stack {
+  private restApi: RestApi;
+  private hellowFunction: NodejsFunction;
+
   constructor(scope: Construct, id: string, props: StackProps = {}) {
     super(scope, id, props);
 
-    // define resources here...
+    this.restApi = new RestApi(this, this.stackName + 'RestApi', {
+      deployOptions: {
+        stageName: 'default',
+        metricsEnabled: true,
+        loggingLevel: MethodLoggingLevel.INFO,
+        dataTraceEnabled: false,
+      },
+    });
+
+    this.hellowFunction = new NodejsFunction(this, 'lambda-hellow', {
+      functionName: 'lambda-hellow',
+      entry: 'src/app/hellow/handler.ts',
+      handler: 'handler',
+      runtime: Runtime.NODEJS_14_X,
+      memorySize: 512,
+      timeout: Duration.seconds(10),
+    });
+
+    this.restApi.root
+      .addResource('hellow')
+      .addMethod('GET', new LambdaIntegration(this.hellowFunction, {}));
+
+    this.restApi.node.addDependency(
+      new CfnPermission(this, 'invoke-permission-hellow', {
+        action: 'lambda:InvokeFunction',
+        functionName: this.hellowFunction.functionName,
+        principal: 'apigateway.amazonaws.com',
+        sourceArn: `arn:aws:execute-api:${Stack.of(this).region}:${Stack.of(this).account}:*`,
+      }),
+    );
   }
 }
 
