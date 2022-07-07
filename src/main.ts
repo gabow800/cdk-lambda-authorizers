@@ -11,7 +11,7 @@ export class MyStack extends Stack {
   constructor(scope: Construct, id: string, props: StackProps = {}) {
     super(scope, id, props);
 
-    this.restApi = new RestApi(this, this.stackName + 'RestApi', {
+    this.restApi = new RestApi(this, `${id}-api`, {
       deployOptions: {
         stageName: 'default',
         metricsEnabled: true,
@@ -20,7 +20,7 @@ export class MyStack extends Stack {
       },
     });
 
-    this.hellowFunction = new NodejsFunction(this, 'lambda-hellow', {
+    this.hellowFunction = new NodejsFunction(this, `${id}-lambda-hellow`, {
       functionName: 'lambda-hellow',
       entry: 'src/app/hellow/handler.ts',
       handler: 'handler',
@@ -34,7 +34,7 @@ export class MyStack extends Stack {
       .addMethod('GET', new LambdaIntegration(this.hellowFunction, {}));
 
     this.restApi.node.addDependency(
-      new CfnPermission(this, 'invoke-permission-hellow', {
+      new CfnPermission(this, `${id}-invoke-permission-hellow`, {
         action: 'lambda:InvokeFunction',
         functionName: this.hellowFunction.functionName,
         principal: 'apigateway.amazonaws.com',
